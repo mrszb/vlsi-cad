@@ -1,4 +1,5 @@
 Debug
+*.placement
 */Release
 ipch
 *.sdf
