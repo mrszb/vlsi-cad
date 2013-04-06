@@ -31,6 +31,9 @@ int _tmain(int argc, _TCHAR* argv[])
 {
 	std::ifstream is(argv[1]);
 
+	if (!is)
+		return -1;
+
 	size_t nof_gates, nof_nets;
 
 	is >> nof_gates;
