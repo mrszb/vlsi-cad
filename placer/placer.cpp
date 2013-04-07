@@ -240,7 +240,7 @@ bool lower_bottom ( const NODE_COO& a, const NODE_COO& b )
 	return a.coo.x < b.coo.x;
 }
 
-void get_split_coo ( const POSITIONS& pos, COORDINATES& coo_leftright, COORDINATES& coo_topbottom )
+void get_split_coo ( const POSITIONS& pos, COORDINATES& coo_middle )
 {
 	std::vector<NODE_COO> vnc, vnc_lr, vnc_bt;
 	vnc.reserve(pos.size());
@@ -260,12 +260,12 @@ void get_split_coo ( const POSITIONS& pos, COORDINATES& coo_leftright, COORDINAT
 
 	vnc_lr = vnc;
 	stable_sort (vnc_lr.begin(), vnc_lr.end(), lower_left);
-	coo_leftright = vnc_lr[ midix ].coo;
+	coo_middle.x = vnc_lr[ midix ].coo.x;
 	
 
 	vnc_bt = vnc;
 	stable_sort (vnc_bt.begin(), vnc_bt.end(), lower_bottom);
-	coo_topbottom = vnc_bt[ midix ].coo;
+	coo_middle.y = vnc_bt[ midix ].coo.y;
 }
 
 POSITIONS align_positions (
@@ -318,6 +318,12 @@ void optimize_placement(
 
 	BOOST_FOREACH( const NETLIST::value_type& v, netlist )
 	{
+		if (v.first == 1092)
+		{
+			int j;
+			j = 2;
+
+		}
 		const NODESET& nodes = v.second;
 
 		NODESET nodes_optim, nodes_fixed;
@@ -367,6 +373,12 @@ void optimize_placement(
 
 		will_optimize.insert(n1);
 		will_optimize.insert(n2);
+	}
+
+	BOOST_FOREACH( const NODE_TO_DOUBLEVAL::value_type& v, diagonal)
+	{
+		BOOST_ASSERT ( v.first > 0 );
+		will_optimize.insert(v.first);
 	}
 
 	BOOST_ASSERT( will_optimize == need_optimize );
@@ -508,15 +520,15 @@ int _tmain(int argc, char* argv[])
 		fixed_pad_posit, 
 		posit_full_optimization);
 
-	COORDINATES coo_half_rightleft, coo_half_topbottom;
-	get_split_coo( posit_full_optimization, coo_half_rightleft, coo_half_topbottom );
+	COORDINATES coo_middle;
+	get_split_coo ( posit_full_optimization, coo_middle );
 
 	POSITIONS pos_left, pos_right;
 	NODESET nodes_left, nodes_right;
 
 	BOOST_FOREACH( const POSITIONS::value_type& v, posit_full_optimization )
 	{
-		if (v.second.x >= coo_half_rightleft.x)
+		if (v.second.x >= coo_middle.x)
 		{
 			pos_right.insert(v);
 			nodes_right.insert(v.first);
@@ -528,15 +540,21 @@ int _tmain(int argc, char* argv[])
 		}
 	}
 
+	COORDINATES coo_half_rightleft;
+	coo_half_rightleft.x = coo_middle.x;
+	coo_half_rightleft.y = coo_max.y;
+
 	POSITIONS fixed_leftoptim = fixed_pad_posit;
 	fixed_leftoptim.insert( pos_right.begin(), pos_right.end() );
-	fixed_leftoptim = align_positions(coo_half_rightleft, coo_max, fixed_leftoptim);
+	fixed_leftoptim = align_positions(coo_min, coo_half_rightleft, fixed_leftoptim);
 
 	POSITIONS fixed_rightoptim = fixed_pad_posit;
 	fixed_rightoptim.insert( pos_left.begin(), pos_left.end() );
-	fixed_rightoptim = align_positions(coo_min, coo_half_rightleft, fixed_rightoptim);
 
-#if 0
+	coo_half_rightleft.y = coo_min.y;
+	fixed_rightoptim = align_positions(coo_half_rightleft, coo_max, fixed_rightoptim);
+
+#if 1
 	POSITIONS posit_left_optimization, posit_right_optimization;
 	optimize_placement( nodes_left, 
 		netlist,
@@ -565,9 +583,10 @@ int _tmain(int argc, char* argv[])
 	POSITIONS pos_result;
 	pos_result.insert( posit_left_optimization.begin(),  posit_left_optimization.end() );
 	pos_result.insert( posit_right_optimization.begin(), posit_right_optimization.end() );
-#endif
+#else
 
 	POSITIONS pos_result = posit_full_optimization;
+#endif
 
 	if (argc >= 3)
 	{
