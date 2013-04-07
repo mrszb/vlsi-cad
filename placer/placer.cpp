@@ -20,6 +20,9 @@
 #include <boost/bind.hpp>
 #include <boost/bimap.hpp>
 
+int max_depth = 6;
+//int max_depth = 3;
+
 //////////////////////////////////////////////////////////////////////////////
 // check results:
 // https://class.coursera.org/vlsicad-001/wiki/view?page=VisualizePlacerResults
@@ -73,28 +76,62 @@ struct COORDINATES
 	{
 		x = xx; y = yy;
 	}
+
+	friend std::ostream& operator<< (std::ostream&, const COORDINATES&);
 };
+
+std::ostream& operator<< ( std::ostream& o , const COORDINATES& c) 
+{
+	o << '[' << c.x << "," << c.y << "]";
+	return o;
+}
+
+struct  AREA
+{
+	COORDINATES xymin, xymax;
+	friend std::ostream& operator<< (std::ostream&, const AREA&);
+};
+
+std::ostream& operator<< ( std::ostream& o , const AREA& a) 
+{
+	o << "x,y from ";
+	o << "<" << a.xymin.x <<  "," << a.xymax.x << ">";
+	o << "<" << a.xymin.y <<  "," << a.xymax.y << ">";
+	return o;
+}
+
+//////////////////////////////////////////
 
 typedef int ID_NODE;
 typedef size_t ID_NET;
 
 typedef std::set<ID_NODE> NODESET;
-typedef std::map<ID_NET, NODESET> NETLIST;
-typedef std::pair<ID_NODE, ID_NODE> EDGE;
+
+typedef std::set<ID_NET> NETSET;
+typedef std::map<ID_NODE, NETSET> PROBLEMSET;
+
+struct EDGE {
+	ID_NODE n1;
+	ID_NODE n2;
+	double weight;
+};
+
 typedef std::map<ID_NODE, COORDINATES> POSITIONS;
 
 typedef std::map<ID_NODE, WEIGHT_2D> NODE_WEIGHTS;
 typedef std::map<ID_NODE, DOUBLEVAL> NODE_TO_DOUBLEVAL;
 
-////////////////////////////////////////////////////////////////////////
+typedef std::vector<NODESET> CONNECTIONS;
 
-int read_specs ( const boost::filesystem::path& path, NETLIST& netlist, POSITIONS& posit )
+///////////////////////////////////////////////////////////////////////
+
+int read_specs ( const boost::filesystem::path& path, 
+				PROBLEMSET& netlist, POSITIONS& posit )
 {
 	boost::filesystem::ifstream is( path );
 
 	if (!is)
 		return 0;
-
 
 	size_t nof_gates, nof_nets;
 
@@ -117,7 +154,7 @@ int read_specs ( const boost::filesystem::path& path, NETLIST& netlist, POSITION
 			is >> net;
 
 			assert( net > 0 && net <= nof_nets);
-			netlist[net].insert(gate);
+			netlist[gate].insert(net);
 		}
 	}
 
@@ -137,7 +174,7 @@ int read_specs ( const boost::filesystem::path& path, NETLIST& netlist, POSITION
 		is >> netid;
 
 		assert( netid > 0 && netid <= nof_nets);
-		netlist[netid].insert(-pinid);
+		netlist[-pinid].insert(netid);
 
 		/////////////////////////////////////////////////////////////////////
 
@@ -150,6 +187,37 @@ int read_specs ( const boost::filesystem::path& path, NETLIST& netlist, POSITION
 
 	return nof_gates;
 }
+
+/*
+void check_netlist (const NETLIST& netlist)
+{
+	typedef std::set<ID_NET> NETSET;
+	typedef std::map<ID_NODE, NETSET> NODE_TO_NET;
+	NODE_TO_NET ntn;
+
+	BOOST_FOREACH( const NETLIST::value_type& v, netlist )
+	{
+		BOOST_FOREACH( const ID_NODE node, v.second)
+		{
+			ntn[node].insert(v.first);
+		}
+	}
+
+	BOOST_FOREACH( const NODE_TO_NET::value_type& v, ntn)
+	{
+		if (v.second.size() > 1)
+		{
+			cout << "node " << v.first << " in nets { " ;
+			BOOST_FOREACH( ID_NET net, v.second)
+			{
+				cout << net;
+				cout << " ";
+			}
+
+			cout << "}" << endl ;
+		}
+	}
+}*/
 
 void write_placement (const boost::filesystem::path& path, const POSITIONS& pos)
 {
@@ -171,51 +239,27 @@ void write_placement (const boost::filesystem::path& path, const POSITIONS& pos)
 	}
 }
 
-void get_max_rect (const POSITIONS& pos, COORDINATES& coo_min, COORDINATES& coo_max)
+void get_max_rect (const POSITIONS& pos, AREA& a)
 {
 	if (pos.empty())
 		return;
 
-	coo_min = pos.begin()->second;
-	coo_max = pos.begin()->second;
+	a.xymax = pos.begin()->second;
+	a.xymin = pos.begin()->second;
 
 	BOOST_FOREACH(const POSITIONS::value_type& v, pos)
 	{
-		if (coo_min.x > v.second.x)
-			coo_min.x = v.second.x;
+		if (a.xymin.x > v.second.x)
+			a.xymin.x = v.second.x;
 
-		if (coo_min.y > v.second.y)
-			coo_min.y = v.second.y;
+		if (a.xymin.y > v.second.y)
+			a.xymin.y = v.second.y;
 
-		if (coo_max.x < v.second.x)
-			coo_max.x = v.second.x;
+		if (a.xymax.x < v.second.x)
+			a.xymax.x = v.second.x;
 
-		if (coo_max.y < v.second.y)
-			coo_max.y = v.second.y;
-	}
-}
-
-void filter_by_rect (
-	const POSITIONS& pos, 
-	const COORDINATES& coo_min, const COORDINATES& coo_max,
-	NODESET& inside_nodes)
-{
-
-	BOOST_FOREACH(const POSITIONS::value_type& v, pos)
-	{
-		if (coo_min.x > v.second.x)
-			continue;
-
-		if (coo_min.y > v.second.y)
-			continue;
-
-		if (coo_max.x < v.second.x)
-			continue;
-
-		if (coo_max.y < v.second.y)
-			continue;
-
-		inside_nodes.insert(v.first);
+		if (a.xymax.y < v.second.y)
+			a.xymax.y = v.second.y;
 	}
 }
 
@@ -262,7 +306,6 @@ void get_split_coo ( const POSITIONS& pos, COORDINATES& coo_middle )
 	stable_sort (vnc_lr.begin(), vnc_lr.end(), lower_left);
 	coo_middle.x = vnc_lr[ midix ].coo.x;
 	
-
 	vnc_bt = vnc;
 	stable_sort (vnc_bt.begin(), vnc_bt.end(), lower_bottom);
 	coo_middle.y = vnc_bt[ midix ].coo.y;
@@ -285,19 +328,31 @@ POSITIONS align_positions (
 	//adj_positions.reserve(positions.size());
 	BOOST_FOREACH( const POSITIONS::value_type&v, positions)
 	{
+		bool is_pad = v.first < 0;
 		COORDINATES newcoo = v.second;
 
 		switch (direction)
 		{
 			case LEFT:
-				if (newcoo.x > xycutoff)
+				if (newcoo.x > xynew)
 					newcoo.x = xynew;
 				break;
 
 			case RIGHT:
 
-				if (newcoo.x < xycutoff)
+				if (newcoo.x < xynew)
 					newcoo.x = xynew;
+				break;
+
+			case BOTTOM:
+				if (newcoo.y > xynew)
+					newcoo.y = xynew;
+				break;
+
+			case TOP:
+
+				if (newcoo.y < xynew)
+					newcoo.y = xynew;
 				break;
 
 		}
@@ -307,10 +362,15 @@ POSITIONS align_positions (
 	return al_positions;
 }
 
+POSITIONS attached_pads_only(const POSITIONS& p)
+{
+	return p;
+}
+
 void optimize_placement( 
 	// input:
 	const NODESET& need_optimize,
-	const NETLIST& netlist,
+	const CONNECTIONS& connected,
 
 	// position
 	const POSITIONS& fixed_positions,
@@ -322,15 +382,9 @@ void optimize_placement(
 	std::map<ID_NODE, WEIGHT_2D> weight;
 	NODE_TO_DOUBLEVAL diagonal;
 
-	BOOST_FOREACH( const NETLIST::value_type& v, netlist )
+	BOOST_FOREACH( const CONNECTIONS::value_type& v, connected )
 	{
-		if (v.first == 1092)
-		{
-			int j;
-			j = 2;
-
-		}
-		const NODESET& nodes = v.second;
+		const NODESET& nodes = v;
 
 		NODESET nodes_optim, nodes_fixed;
 		BOOST_FOREACH( ID_NODE const node, nodes )
@@ -348,7 +402,18 @@ void optimize_placement(
 		BOOST_FOREACH(ID_NODE const n1, nodes_optim)
 			BOOST_FOREACH(ID_NODE const n2, nodes_optim)
 				if (n1 != n2)
-					edges.push_back( EDGE(n1,n2) );
+				{
+					EDGE e;
+					e.n1 = n1;
+					e.n2 = n2;
+
+					double const clique_weight = 1.0 / (nodes_optim.size() -1);
+					e.weight = clique_weight;
+					//e.weight = 1.0;
+
+					edges.push_back( e );
+					diagonal [ n1 ] += e.weight;
+				}
 
 		BOOST_FOREACH(ID_NODE const n1, nodes_optim)
 			BOOST_FOREACH(ID_NODE const n2, nodes_fixed)
@@ -357,28 +422,26 @@ void optimize_placement(
 				BOOST_ASSERT( itWeights != fixed_positions.end() );
 				const COORDINATES& coo = itWeights->second;
 
-				WEIGHT_2D& w = weight[n1];
-				w.x += coo.x;
-				w.y += coo.y;
+				double const clique_weight = 1.0 / ( nodes_optim.size() );
 
-				diagonal [n1] += 1.0;
+				WEIGHT_2D& w = weight[n1];
+				w.x += (clique_weight * coo.x);
+				w.y += (clique_weight * coo.y);
+
+				diagonal [n1] += clique_weight;
 			}		
 	}
 
 	NODESET will_optimize;
 	BOOST_FOREACH( const EDGE& e, edges)
 	{
-		ID_NODE n1, n2;
-		n1 = e.first;
-		n2 = e.second;
-
 		// fix mapping
-		BOOST_ASSERT ( n1 != n2 );
-		BOOST_ASSERT ( n1 > 0 );
-		BOOST_ASSERT ( n2 > 0 );
+		BOOST_ASSERT ( e.n1 != e.n2 );
+		BOOST_ASSERT ( e.n1 > 0 );
+		BOOST_ASSERT ( e.n2 > 0 );
 
-		will_optimize.insert(n1);
-		will_optimize.insert(n2);
+		will_optimize.insert(e.n1);
+		will_optimize.insert(e.n2);
 	}
 
 	BOOST_FOREACH( const NODE_TO_DOUBLEVAL::value_type& v, diagonal)
@@ -403,21 +466,15 @@ void optimize_placement(
 
 	BOOST_FOREACH( const EDGE& e, edges)
 	{
-		ID_NODE n1, n2;
-		n1 = e.first;
-		n2 = e.second;
-
-		IX_MAPPING::left_const_iterator left_iter1 = ixmap.left.find( n1 );
+		IX_MAPPING::left_const_iterator left_iter1 = ixmap.left.find( e.n1 );
 		BOOST_ASSERT (left_iter1 != ixmap.left.end());
 
-		IX_MAPPING::left_const_iterator left_iter2 = ixmap.left.find( n2 );
+		IX_MAPPING::left_const_iterator left_iter2 = ixmap.left.find( e.n2 );
 		BOOST_ASSERT (left_iter2 != ixmap.left.end());
 
 		R.push_back( left_iter1->second );
 		C.push_back( left_iter2->second );
-		V.push_back( -1.0 );
-
-		diagonal [ n1 ] += 1.0;
+		V.push_back( -e.weight );
 	}
 
 	BOOST_FOREACH ( const NODE_TO_DOUBLEVAL::value_type& v, diagonal)
@@ -486,6 +543,126 @@ void optimize_placement(
 	}
 }
 
+POSITIONS split_optimize_merge (
+	std::string depth,
+	const AREA& a,
+	const NODESET& need_optimize,
+	const CONNECTIONS& connections,
+	const POSITIONS& fixed_positions
+)
+{
+	cout << depth << " ";
+	bool horizontal = (depth.length() % 2) == 0;
+
+	// test - should not align at all
+	// AREA a;
+	// get_max_rect( fixed_positions, a );
+
+	cout << a << " -> ";
+
+	POSITIONS posit_full_optimization;
+	optimize_placement( need_optimize, 
+		connections,
+		fixed_positions, 
+		posit_full_optimization);
+
+	COORDINATES coo_qcenter;
+	get_split_coo ( posit_full_optimization, coo_qcenter );
+
+	cout << coo_qcenter;
+
+	if (depth.length() >= max_depth)
+	{
+		cout << " DONE" << std::endl;
+		return posit_full_optimization;
+	}
+
+	cout << " split" << std::endl;
+
+	POSITIONS pos_A, pos_B;
+	NODESET nodes_A, nodes_B;
+
+	BOOST_FOREACH( const POSITIONS::value_type& v, posit_full_optimization )
+	{
+		if (horizontal)
+		{
+			if (v.second.x >= coo_qcenter.x)
+			{
+				pos_B.insert(v);
+				nodes_B.insert(v.first);
+			}
+			else
+			{
+				pos_A.insert(v);
+				nodes_A.insert(v.first);
+			}
+		}
+		else
+		{
+			if (v.second.y >= coo_qcenter.y)
+			{
+				pos_B.insert(v);
+				nodes_B.insert(v.first);
+			}
+			else
+			{
+				pos_A.insert(v);
+				nodes_A.insert(v.first);
+			}
+		}
+	}
+
+	double const newmiddle_x = (a.xymax.x + a.xymin.x) / 2.0;
+	double const newmiddle_y = (a.xymax.y + a.xymin.y) / 2.0;
+
+	AREA areaA, areaB;
+	areaA = areaB = a;
+
+	POSITIONS fixed_optimA = attached_pads_only(fixed_positions);
+	fixed_optimA.insert( pos_B.begin(), pos_B.end() );
+
+	POSITIONS fixed_optimB = attached_pads_only(fixed_positions);
+	fixed_optimB.insert( pos_A.begin(), pos_A.end() );
+
+	if (horizontal)
+	{
+		fixed_optimA = align_positions(LEFT,  coo_qcenter.x, newmiddle_x, fixed_optimA);
+		fixed_optimB = align_positions(RIGHT, coo_qcenter.x, newmiddle_x, fixed_optimB);
+
+		areaA.xymax.x = areaB.xymin.x = newmiddle_x;
+	}
+	else
+	{
+		fixed_optimA = align_positions(BOTTOM, coo_qcenter.y, newmiddle_y, fixed_optimA);
+		fixed_optimB = align_positions(TOP,    coo_qcenter.y, newmiddle_y, fixed_optimB);
+
+		areaA.xymax.y = areaB.xymin.y = newmiddle_y;
+	}
+
+	POSITIONS posit_B_optimization = split_optimize_merge( 
+		horizontal ? depth + "R" : depth + "T",
+		areaB,
+		nodes_B, 
+		connections,
+		fixed_optimB
+		);
+
+	POSITIONS posit_A_optimization = split_optimize_merge(
+		horizontal ? depth + "L" : depth + "B",
+		areaA,
+		nodes_A, 
+		connections,
+		fixed_optimA 
+	);
+
+	// merge results
+	POSITIONS pos_result;
+	pos_result.insert( posit_A_optimization.begin(), posit_A_optimization.end() );
+	pos_result.insert( posit_B_optimization.begin(), posit_B_optimization.end() );
+
+	return pos_result;
+}
+
 //////////////////////////////////////////////////////////////////////
 
 int _tmain(int argc, char* argv[])
@@ -498,9 +675,14 @@ int _tmain(int argc, char* argv[])
 		filename += argv[2];
 	}
 
+	if (argc >=4)
+	{
+		max_depth = atoi(argv[3]);
+	}
+
 	//////////////////////////////////////////////////////////////////////////////////////////////
 
-	NETLIST netlist; 
+	PROBLEMSET netlist; 
 	POSITIONS fixed_pad_posit;
 
 	const boost::filesystem::path path_specs( filename );
@@ -509,86 +691,78 @@ int _tmain(int argc, char* argv[])
 	if (nof_gates == 0)
 		return -1;
 
+	// find loops
+	CONNECTIONS connected;
+	NODESET nodes;
+
+	typedef std::map<ID_NET, NODESET> NET_TO_NODE;
+	NET_TO_NODE ntn;
+
+	BOOST_FOREACH( const PROBLEMSET::value_type& v, netlist )
+	{
+		nodes.insert(v.first);
+		BOOST_FOREACH(ID_NET net, v.second)
+			ntn[ net ].insert( v.first );
+	}
+
+	BOOST_FOREACH( const NET_TO_NODE::value_type& v, ntn )
+		connected.push_back(v.second);
+
+	/*
+	BOOST_FOREACH (ID_NODE const node, nodes)
+	{
+		size_t t = 0;
+		NODESET nodes_merged;
+
+		CONNECTIONS::iterator itFirst = connected.end();
+		for ( CONNECTIONS::iterator itConn = connected.begin(); itConn != connected.end(); )
+		{
+			const NODESET& nodes = *itConn;
+			if (nodes.find(node) != nodes.end())
+			{
+				// first occurrence
+				if ( itFirst == connected.end() )
+				{
+					itFirst = itConn;
+					t = 1;
+				}
+				else
+				{
+					t++;
+					const NODESET& duplicate_nodes = *itConn;
+					nodes_merged.insert(duplicate_nodes.begin(), duplicate_nodes.end());
+					itConn = connected.erase(itConn);
+					continue;
+				}
+			}
+
+			itConn++;
+		}
+
+		if ( t != 1)
+			cout << "node " << node << " shown " << t << "times" << endl;
+
+		if ( !nodes_merged.empty() )
+		{
+			BOOST_ASSERT(itFirst != connected.end());
+			itFirst->insert(nodes_merged.begin(), nodes_merged.end());
+		}
+	}*/
+
 	///////////////////////////////////////////////////////////////////////////////////////////////
+	//check_netlist( netlist );
 
 	NODESET nodes_to_optimize;
 	for (int i = 1; i <= nof_gates; i++)
 		nodes_to_optimize.insert(i);
 
-	// test - should not align at all
-	COORDINATES coo_min, coo_max;
-	get_max_rect( fixed_pad_posit, coo_min, coo_max );
-	//fixed_pad_posit = align_positions(coo_min, coo_max, fixed_pad_posit);
+	AREA a;
+	get_max_rect( fixed_pad_posit, a );
+	cout << "pads create the area of " << a << endl;
 
-	POSITIONS posit_full_optimization;
-	optimize_placement( nodes_to_optimize, 
-		netlist,
-		fixed_pad_posit, 
-		posit_full_optimization);
-
-	COORDINATES coo_qcenter;
-	get_split_coo ( posit_full_optimization, coo_qcenter );
-
-	POSITIONS pos_left, pos_right;
-	NODESET nodes_left, nodes_right;
-
-	BOOST_FOREACH( const POSITIONS::value_type& v, posit_full_optimization )
-	{
-		if (v.second.x >= coo_qcenter.x)
-		{
-			pos_right.insert(v);
-			nodes_right.insert(v.first);
-		}
-		else
-		{
-			pos_left.insert(v);
-			nodes_left.insert(v.first);
-		}
-	}
-
-	double const newmiddle_x = (coo_max.x + coo_min.x) / 2.0;
-
-	POSITIONS fixed_leftoptim = fixed_pad_posit;
-	fixed_leftoptim.insert( pos_right.begin(), pos_right.end() );
-	fixed_leftoptim = align_positions(LEFT, coo_qcenter.x, newmiddle_x, fixed_leftoptim);
-
-	POSITIONS fixed_rightoptim = fixed_pad_posit;
-	fixed_rightoptim.insert( pos_left.begin(), pos_left.end() );
-	fixed_rightoptim = align_positions(RIGHT, coo_qcenter.x, newmiddle_x,  fixed_rightoptim);
-
-#if 1
-	POSITIONS posit_left_optimization, posit_right_optimization;
-	optimize_placement( nodes_left, 
-		netlist,
-		fixed_leftoptim, 
-		posit_left_optimization);
-
-	optimize_placement( nodes_right, 
-		netlist,
-		fixed_rightoptim, 
-		posit_right_optimization);
-
-	/*
-	NODESET nodes_all;
-
-	std::transform( 
-		posit_1st_optimization.begin(), posit_1st_optimization.end(),
-		std::inserter(nodes_all, nodes_all.begin()),
-		boost::bind ( &POSITIONS::value_type::first, _1 )
-	);
-
-	set_difference(posit_1st_optimization.begin(), posit_1st_optimization.end(), 
-		left_nodes.begin(), left_nodes.end(),
-		std::back_inserter( right_nodes )
-	);*/
-
-	POSITIONS pos_result;
-	pos_result.insert( posit_left_optimization.begin(),  posit_left_optimization.end() );
-	pos_result.insert( posit_right_optimization.begin(), posit_right_optimization.end() );
-#else
-
-	POSITIONS pos_result = posit_full_optimization;
-#endif
+	POSITIONS pos_result = split_optimize_merge(
+		"", a, nodes_to_optimize,
+		connected, fixed_pad_posit);
 
 	if (argc >= 3)
 	{
