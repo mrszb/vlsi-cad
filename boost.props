@@ -1,0 +1,36 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup Label="UserMacros">
+  
+    <PathToLib>$(MR_ROOT)\</PathToLib>
+
+    <Compiler Condition="'$(PlatformToolset)' == 'v100'">msvc-10.0</Compiler>
+    <Compiler Condition="'$(PlatformToolset)' == 'v110'">msvc-11.0</Compiler>
+
+    <BoostVersion>1.52.0</BoostVersion>
+
+    <BoostInclude>$(PathToLib)\Boost\$(BoostVersion)\include\</BoostInclude>
+    <BoostLib>$(PathToLib)\Boost\$(BoostVersion)\lib\$(Compiler)\$(PlatformName)</BoostLib>
+
+  </PropertyGroup>
+  <ItemDefinitionGroup>
+    <ClCompile>
+      <AdditionalIncludeDirectories>$(BoostInclude)</AdditionalIncludeDirectories>
+       <PreprocessorDefinitions></PreprocessorDefinitions>
+    </ClCompile>
+    <Link>
+      <AdditionalLibraryDirectories>$(BoostLib)</AdditionalLibraryDirectories>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemGroup>
+
+    <BuildMacro Include="Compiler">
+      <Value>$(Compiler)</Value>
+    </BuildMacro>
+
+    <BuildMacro Include="BoostVersion">
+      <Value>$(BoostVersion)</Value>
+      <EnvironmentVariable>true</EnvironmentVariable>
+    </BuildMacro>
+  </ItemGroup>
+</Project>

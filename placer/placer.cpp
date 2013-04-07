@@ -13,57 +13,94 @@
 #include <vector>
 #include <string>
 
+#include <boost/filesystem.hpp>
+#include <boost/filesystem/fstream.hpp>
+#include <boost/foreach.hpp>
+#include <boost/assert.hpp>
+
 //////////////////////////////////////////////////////////////////////////////
 // check results:
 // https://class.coursera.org/vlsicad-001/wiki/view?page=VisualizePlacerResults
 ///////////////////////////////////////////////////////////////////////
 
-typedef size_t ID_GATE;
-typedef size_t ID_NET;
-
-typedef std::set<ID_NET> NETSET;
-typedef std::set<ID_GATE> GATESET;
-typedef std::map<ID_GATE, NETSET> GATELIST;
-typedef std::map<ID_NET, GATESET> NETLIST;
-
-typedef size_t ID_PAD;
-struct PAD
+struct DOUBLEVAL
 {
-	ID_NET id_net;
-	double x, y;
+	double dVal;
+	DOUBLEVAL (void) { dVal = 0.0; }
+	DOUBLEVAL (double val) { dVal = val; }
+
+	operator double () const
+	{ return dVal; }
+
+	double operator+(double val) const
+	{ return dVal + val; }
+
+	double operator-(double val) const
+	{ return dVal - val; }
+
+	DOUBLEVAL& operator+=(double val)
+	{ dVal += val; return *this; }
+
+	DOUBLEVAL& operator-=(double val)
+	{ dVal -= val; return *this; }
+
+	const DOUBLEVAL& operator=(const DOUBLEVAL& val)
+	{ dVal = val.dVal; return *this; }
+
+	const DOUBLEVAL& operator=(double val)
+	{ dVal = val; return *this; }
 };
 
-typedef std::map<ID_PAD, PAD> PADLIST;
-
-//////////////////////////////////////////////////////////////////////
-
-int _tmain(int argc, char* argv[])
+struct WEIGHT_2D
 {
-	std::string filename = std::string(argv[1]) ;
-	
-	if (argc >= 3)
+	DOUBLEVAL x,y;
+};
+
+///////////////////////////////////////
+
+struct COORDINATES
+{
+	double x,y;
+
+	COORDINATES()
 	{
-		filename += "/";
-		filename += argv[2];
+		x = y = -1;
 	}
 
-	std::ifstream is( filename );
+	COORDINATES(double xx, double yy)
+	{
+		x = xx; y = yy;
+	}
+};
+
+typedef int ID_NODE;
+typedef size_t ID_NET;
+
+typedef std::set<ID_NODE> NODESET;
+typedef std::map<ID_NET, NODESET> NETLIST;
+typedef std::pair<ID_NODE, ID_NODE> EDGE;
+typedef std::map<ID_NODE, COORDINATES> POSITIONS;
+
+typedef std::map<ID_NODE, WEIGHT_2D> NODE_WEIGHTS;
+
+////////////////////////////////////////////////////////////////////////
+
+int read_specs ( const boost::filesystem::path& path, NETLIST& netlist, POSITIONS& posit )
+{
+	boost::filesystem::ifstream is( path );
 
 	if (!is)
-		return -1;
+		return 0;
+
 
 	size_t nof_gates, nof_nets;
 
 	is >> nof_gates;
 	is >> nof_nets;
 
-	NETLIST gatelist;
-	NETLIST netlist;
-	PADLIST pads;
-
 	for (size_t i = 0; i < nof_gates; ++i)
 	{
-		ID_GATE gate;
+		ID_NODE gate;
 		is >> gate;
 
 		assert( gate > 0 && gate <= nof_gates);
@@ -77,7 +114,6 @@ int _tmain(int argc, char* argv[])
 			is >> net;
 
 			assert( net > 0 && net <= nof_nets);
-			gatelist[gate].insert(net);
 			netlist[net].insert(gate);
 		}
 	}
@@ -87,89 +123,173 @@ int _tmain(int argc, char* argv[])
 
 	for (size_t i = 0; i < nof_pads; ++i)
 	{
-		ID_PAD pinid;
+		////////////////////////////////////////////////////////////////////
+
+		int pinid;
 		is >> pinid;
 
 		assert( pinid > 0 && pinid <= nof_pads);
 
-		PAD pad;
-		is >> pad.id_net;
-		is >> pad.x;
-		is >> pad.y;
+		int netid;
+		is >> netid;
 
-		pads[pinid] = pad;
+		assert( netid > 0 && netid <= nof_nets);
+		netlist[netid].insert(-pinid);
+
+		/////////////////////////////////////////////////////////////////////
+
+		COORDINATES coo;
+		is >> coo.x;
+		is >> coo.y;
+
+		posit[-pinid] = coo;
 	}
 
-	std::cout << pads.size() << std::endl;
+	return nof_gates;
+}
 
-
-	///////////////////////////////////////////////////////////////////////////////////////////////
-
-	struct GATE_CONNECTION
+void write_placement (const boost::filesystem::path& path, const POSITIONS& pos)
+{
+	boost::filesystem::ofstream out ( path );
+	BOOST_FOREACH( const POSITIONS::value_type& v, pos)
 	{
-		ID_GATE g1, g2;
-	};
+		ID_NODE node = v.first;
+		if (node < 0)
+			continue;
 
-	std::vector<GATE_CONNECTION> vgateconn;
+		// BOOST_ASSERT (node > 0 && node <= nof_gates);
+
+		out << (node);
+		out << ' ';
+		out << v.second.x;
+		out << ' ';
+		out << v.second.y;
+		out << std::endl;
+	}
+}
+
+void get_rect (const POSITIONS& pos, COORDINATES& coo_min, COORDINATES& coo_max)
+{
+	if (pos.empty())
+		return;
+
+	coo_min = pos.begin()->second;
+	BOOST_FOREACH(const POSITIONS::value_type& v, pos)
+	{
+		if (coo_min.x > v.second.x)
+			coo_min.x = v.second.x;
+
+		if (coo_min.y > v.second.y)
+			coo_min.y = v.second.y;
+
+		if (coo_max.x < v.second.x)
+			coo_max.x = v.second.x;
+
+		if (coo_max.y < v.second.y)
+			coo_max.y = v.second.y;
+	}
+}
+
+void move_positions (
+	// bounding rectangle
+	const COORDINATES& bottom_left, 
+	const COORDINATES& top_right,
+
+	// position
+	const POSITIONS& positions,
+
+	// adjusted position
+	POSITIONS& adj_positions
+	)
+{
+	//adj_positions.reserve(positions.size());
+	BOOST_FOREACH( const POSITIONS::value_type&v, positions)
+	{
+		COORDINATES coo = v.second;
+		adj_positions[v.first] = coo;
+	}
+
+}
+
+
+void optimize_placement( 
+	// input:
+	const NODESET& need_optimize,
+	const NETLIST& netlist,
+
+	// position
+	const POSITIONS& fixed_positions,
 	
-	for (NETLIST::const_iterator itNet = netlist.begin(); itNet != netlist.end(); itNet++)
-	{
-		const NETSET& nets = itNet->second;
+	// output
+	POSITIONS& optimized_positions )
+{
 
-		for (NETSET::const_iterator i = nets.begin(); i != nets.end(); ++i)
-			for (NETSET::const_iterator j = nets.begin(); j != nets.end(); ++j)
+	NODESET will_optimize = need_optimize;
+
+	std::vector<EDGE> edges;
+	std::map<ID_NODE, WEIGHT_2D> weight;
+	std::map<ID_NODE, DOUBLEVAL> diagonal;
+
+	BOOST_FOREACH( const NETLIST::value_type& v, netlist )
+	{
+		const NODESET& nodes = v.second;
+
+		NODESET nodes_optim, nodes_fixed;
+		BOOST_FOREACH( ID_NODE const node, nodes )
+		{
+			if ( need_optimize.find( node ) != need_optimize.end() )
 			{
-				GATE_CONNECTION gc;
-				gc.g1 = *i;
-				gc.g2 = *j;
-				if (gc.g1 != gc.g2)
-					vgateconn.push_back(gc);
+				// never optimize pads
+				BOOST_ASSERT( node > 0 );
+				nodes_optim.insert( node );
 			}
+			else
+				nodes_fixed.insert( node );
+		}
+
+		BOOST_FOREACH(ID_NODE const n1, nodes_optim)
+			BOOST_FOREACH(ID_NODE const n2, nodes_optim)
+				if (n1 != n2)
+					edges.push_back( EDGE(n1,n2) );
+
+		BOOST_FOREACH(ID_NODE const n1, nodes_optim)
+			BOOST_FOREACH(ID_NODE const n2, nodes_fixed)
+			{
+				POSITIONS::const_iterator itWeights = fixed_positions.find( n2 );
+				BOOST_ASSERT( itWeights != fixed_positions.end() );
+				const COORDINATES& coo = itWeights->second;
+
+				WEIGHT_2D& w = weight[n1];
+				w.x += coo.x;
+				w.y += coo.y;
+
+				diagonal [n1 - 1] += 1.0;
+			}		
 	}
 
-	/////////////////////////////////////////////////////////////////////////////////////////
+	const size_t nof_gates = will_optimize.size();
 
 	std::vector<int> R,C;
 	std::vector<double> V;
-	R.reserve(vgateconn.size());
+	R.reserve( edges.size() + nof_gates);
 
-	valarray<double> diagonal(0.0, nof_gates);
-	valarray<double> xpads(0.0, nof_gates);
-	valarray<double> ypads(0.0, nof_gates);
-
-	for (PADLIST::const_iterator itPad = pads.begin(); itPad != pads.end(); itPad++)
+	BOOST_FOREACH( const EDGE& e, edges)
 	{
-		const PAD& pad = itPad->second;
-		NETLIST::const_iterator itGates = netlist.find(pad.id_net);
-		assert(itGates != netlist.end());
+		ID_NODE n1, n2;
+		n1 = e.first;
+		n2 = e.second;
 
-		const NETSET& nets = itGates->second;
-		//assert (nets.size() == 1);
-		for (NETSET::const_iterator itN = nets.begin(); itN != nets.end(); itN++)
-		{
-			const ID_GATE& id_gate = *itN;
-			diagonal[id_gate - 1] += 1.0;
+		// fix mapping
+		BOOST_ASSERT ( n1 != n2 );
+		BOOST_ASSERT ( n1 > 0 );
+		BOOST_ASSERT ( n2 > 0 );
 
-			xpads[id_gate - 1] += pad.x;
-			ypads[id_gate - 1] += pad.y;
-		}
-	}
-
-	////////////////////////////////////////////////////////////////////////////////////////
-
-	for (std::vector<GATE_CONNECTION>::const_iterator itG = vgateconn.begin(); 
-			itG != vgateconn.end(); itG++)
-	{
-		const GATE_CONNECTION& gc = *itG;
-		assert (gc.g1 != gc.g2 );
-
-		R.push_back( gc.g1 - 1);
-		C.push_back( gc.g2 - 1);
+		R.push_back( n1 - 1);
+		C.push_back( n2 - 1);
 		V.push_back( -1.0 );
 
-		diagonal[gc.g1 -1] += 1.0;
+		diagonal [n1 - 1] += 1.0;
 	}
-
 
 	for (size_t d=0; d < diagonal.size(); d++)
 	{
@@ -178,10 +298,19 @@ int _tmain(int argc, char* argv[])
 		V.push_back( diagonal[d] );
 	}
 
+	valarray<double> xpads(0.0, nof_gates);
+	valarray<double> ypads(0.0, nof_gates);
+
+	BOOST_FOREACH(const NODE_WEIGHTS::value_type& w, weight)
+	{
+		int wno = w.first -1;
+		xpads[wno] = w.second.x;
+		ypads[wno] = w.second.y;
+	}
 
 	///////////////////////////////////////////////////
 	coo_matrix A;
-	
+
 	A.n = nof_gates;
 	A.nnz = R.size();
 
@@ -193,34 +322,88 @@ int _tmain(int argc, char* argv[])
 	A.col = valarray<int>(&C.front(), A.nnz);
 	A.dat = valarray<double>(&V.front(), A.nnz);
 
-	// initialize as [1, 1, 1]
+	// initialize as [1, ... 1]
 	valarray<double> x(1.0, A.n);
 	valarray<double> y(1.0, A.n);
 
 	// solve for x
-	cout << "x = " << endl;
+	//cout << "x = " << endl;
 	A.solve(xpads, x);
-	print_valarray(x);
+	//print_valarray(x);
 
 	// solve for y
-	cout << "y = " << endl;
+	//cout << "y = " << endl;
 	A.solve(ypads, y);
-	print_valarray(y);
+	//print_valarray(y);
+
+	for ( size_t d=0; d < xpads.size(); d++ )
+	{
+		COORDINATES coo;
+		coo.x = x[d];
+		coo.y = y[d];
+
+		optimized_positions[d+1] = coo;
+	}
+}
+
+
+//////////////////////////////////////////////////////////////////////
+
+int _tmain(int argc, char* argv[])
+{
+	std::string filename = std::string(argv[1]) ;
 	
-	if (argc >=3)
+	if (argc >= 3)
+	{
+		filename += "/";
+		filename += argv[2];
+	}
+
+	//////////////////////////////////////////////////////////////////////////////////////////////
+
+	NETLIST netlist; 
+	POSITIONS posit;
+
+	const boost::filesystem::path path_specs( filename );
+	size_t nof_gates = read_specs( path_specs, netlist, posit);
+
+	if (nof_gates == 0)
+		return -1;
+
+	///////////////////////////////////////////////////////////////////////////////////////////////
+
+	NODESET nodes_to_optimize;
+	for (int i = 1; i <= nof_gates; i++)
+		nodes_to_optimize.insert(i);
+
+	COORDINATES coo_min, coo_max;
+	get_rect( posit, coo_min, coo_max );
+
+	POSITIONS fixed_posit;
+	move_positions(coo_min, coo_max, posit, fixed_posit);
+
+	POSITIONS new_posit;
+	optimize_placement( nodes_to_optimize, 
+		netlist,
+		fixed_posit, 
+		new_posit);
+
+	if (argc >= 3)
 	{
 		std::string outfilename = "./";
 		outfilename += argv[2];
 		outfilename += ".placement";
 
 		ofstream out ( outfilename );
-		for (size_t g = 0; g < nof_gates; g++)
+		BOOST_FOREACH( const POSITIONS::value_type&v, new_posit)
 		{
-			out << (g+1);
+			const COORDINATES& coo = v.second;
+		
+			out << (v.first);
 			out << ' ';
-			out << x[g];
+			out << coo.x;
 			out << ' ';
-			out << y[g];
+			out << coo.y;
 			out << std::endl;
 		}
 	}

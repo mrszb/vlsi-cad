@@ -4,4 +4,6 @@ Debug
 ipch
 *.sdf
 *.suo
+*.opensdf
+*.bak
 
