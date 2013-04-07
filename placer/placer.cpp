@@ -18,6 +18,7 @@
 #include <boost/foreach.hpp>
 #include <boost/assert.hpp>
 #include <boost/bind.hpp>
+#include <boost/bimap.hpp>
 
 //////////////////////////////////////////////////////////////////////////////
 // check results:
@@ -83,6 +84,7 @@ typedef std::pair<ID_NODE, ID_NODE> EDGE;
 typedef std::map<ID_NODE, COORDINATES> POSITIONS;
 
 typedef std::map<ID_NODE, WEIGHT_2D> NODE_WEIGHTS;
+typedef std::map<ID_NODE, DOUBLEVAL> NODE_TO_DOUBLEVAL;
 
 ////////////////////////////////////////////////////////////////////////
 
@@ -310,12 +312,9 @@ void optimize_placement(
 	// output
 	POSITIONS& optimized_positions )
 {
-
-	NODESET will_optimize = need_optimize;
-
 	std::vector<EDGE> edges;
 	std::map<ID_NODE, WEIGHT_2D> weight;
-	std::map<ID_NODE, DOUBLEVAL> diagonal;
+	NODE_TO_DOUBLEVAL diagonal;
 
 	BOOST_FOREACH( const NETLIST::value_type& v, netlist )
 	{
@@ -350,16 +349,11 @@ void optimize_placement(
 				w.x += coo.x;
 				w.y += coo.y;
 
-				diagonal [n1 - 1] += 1.0;
+				diagonal [n1] += 1.0;
 			}		
 	}
 
-	const size_t nof_gates = will_optimize.size();
-
-	std::vector<int> R,C;
-	std::vector<double> V;
-	R.reserve( edges.size() + nof_gates);
-
+	NODESET will_optimize;
 	BOOST_FOREACH( const EDGE& e, edges)
 	{
 		ID_NODE n1, n2;
@@ -371,28 +365,65 @@ void optimize_placement(
 		BOOST_ASSERT ( n1 > 0 );
 		BOOST_ASSERT ( n2 > 0 );
 
-		R.push_back( n1 - 1);
-		C.push_back( n2 - 1);
-		V.push_back( -1.0 );
-
-		diagonal [n1 - 1] += 1.0;
+		will_optimize.insert(n1);
+		will_optimize.insert(n2);
 	}
 
-	for (size_t d=0; d < diagonal.size(); d++)
+	BOOST_ASSERT( will_optimize == need_optimize );
+	const size_t nof_gates = will_optimize.size();
+
+	typedef boost::bimap< ID_NODE, size_t > IX_MAPPING;
+	IX_MAPPING ixmap;
+
+	size_t ix = 0;
+	BOOST_FOREACH( ID_NODE node, will_optimize)
+		ixmap.insert (IX_MAPPING::value_type (node, ix++));
+
+	std::vector<int> R,C;
+	std::vector<double> V;
+	R.reserve( edges.size() + nof_gates);
+
+	BOOST_FOREACH( const EDGE& e, edges)
 	{
-		R.push_back( d );
-		C.push_back( d);
-		V.push_back( diagonal[d] );
+		ID_NODE n1, n2;
+		n1 = e.first;
+		n2 = e.second;
+
+		IX_MAPPING::left_const_iterator left_iter1 = ixmap.left.find( n1 );
+		BOOST_ASSERT (left_iter1 != ixmap.left.end());
+
+		IX_MAPPING::left_const_iterator left_iter2 = ixmap.left.find( n2 );
+		BOOST_ASSERT (left_iter2 != ixmap.left.end());
+
+		R.push_back( left_iter1->second );
+		C.push_back( left_iter2->second );
+		V.push_back( -1.0 );
+
+		diagonal [ n1 ] += 1.0;
+	}
+
+	BOOST_FOREACH ( const NODE_TO_DOUBLEVAL::value_type& v, diagonal)
+	{
+		IX_MAPPING::left_const_iterator left_iter = ixmap.left.find( v.first );
+		BOOST_ASSERT (left_iter != ixmap.left.end());
+		size_t ix = left_iter->second;
+
+		R.push_back( ix );
+		C.push_back( ix );
+		V.push_back( v.second );
 	}
 
 	valarray<double> xpads(0.0, nof_gates);
 	valarray<double> ypads(0.0, nof_gates);
 
-	BOOST_FOREACH(const NODE_WEIGHTS::value_type& w, weight)
+	BOOST_FOREACH(const NODE_WEIGHTS::value_type& v, weight)
 	{
-		int wno = w.first -1;
-		xpads[wno] = w.second.x;
-		ypads[wno] = w.second.y;
+		IX_MAPPING::left_const_iterator left_iter = ixmap.left.find( v.first );
+		BOOST_ASSERT (left_iter != ixmap.left.end());
+		size_t ix = left_iter->second;
+
+		xpads[ix] = v.second.x;
+		ypads[ix] = v.second.y;
 	}
 
 	///////////////////////////////////////////////////
@@ -429,7 +460,11 @@ void optimize_placement(
 		coo.x = x[d];
 		coo.y = y[d];
 
-		optimized_positions[d+1] = coo;
+		IX_MAPPING::right_const_iterator right_iter = ixmap.right.find( d );
+		BOOST_ASSERT (right_iter != ixmap.right.end());
+		size_t ix = right_iter->second;
+
+		optimized_positions[ix] = coo;
 	}
 }
 
