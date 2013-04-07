@@ -268,10 +268,13 @@ void get_split_coo ( const POSITIONS& pos, COORDINATES& coo_middle )
 	coo_middle.y = vnc_bt[ midix ].coo.y;
 }
 
+enum DIR {TOP, BOTTOM, LEFT, RIGHT};
+
 POSITIONS align_positions (
+	DIR direction,
 	// bounding rectangle
-	const COORDINATES& bottom_left, 
-	const COORDINATES& top_right,
+	double xycutoff,
+	double xynew,
 
 	// position
 	const POSITIONS& positions
@@ -283,18 +286,21 @@ POSITIONS align_positions (
 	BOOST_FOREACH( const POSITIONS::value_type&v, positions)
 	{
 		COORDINATES newcoo = v.second;
-		if (newcoo.x > top_right.x)
-			newcoo.x = top_right.x;
 
-		if (newcoo.y > top_right.y)
-			newcoo.y = top_right.y;
+		switch (direction)
+		{
+			case LEFT:
+				if (newcoo.x > xycutoff)
+					newcoo.x = xynew;
+				break;
 
-		if (newcoo.x < bottom_left.x)
-			newcoo.x = bottom_left.x;
+			case RIGHT:
 
-		if (newcoo.y < bottom_left.y)
-			newcoo.y = bottom_left.y;
+				if (newcoo.x < xycutoff)
+					newcoo.x = xynew;
+				break;
 
+		}
 		al_positions[v.first] = newcoo;
 	}
 
@@ -512,7 +518,7 @@ int _tmain(int argc, char* argv[])
 	// test - should not align at all
 	COORDINATES coo_min, coo_max;
 	get_max_rect( fixed_pad_posit, coo_min, coo_max );
-	fixed_pad_posit = align_positions(coo_min, coo_max, fixed_pad_posit);
+	//fixed_pad_posit = align_positions(coo_min, coo_max, fixed_pad_posit);
 
 	POSITIONS posit_full_optimization;
 	optimize_placement( nodes_to_optimize, 
@@ -520,15 +526,15 @@ int _tmain(int argc, char* argv[])
 		fixed_pad_posit, 
 		posit_full_optimization);
 
-	COORDINATES coo_middle;
-	get_split_coo ( posit_full_optimization, coo_middle );
+	COORDINATES coo_qcenter;
+	get_split_coo ( posit_full_optimization, coo_qcenter );
 
 	POSITIONS pos_left, pos_right;
 	NODESET nodes_left, nodes_right;
 
 	BOOST_FOREACH( const POSITIONS::value_type& v, posit_full_optimization )
 	{
-		if (v.second.x >= coo_middle.x)
+		if (v.second.x >= coo_qcenter.x)
 		{
 			pos_right.insert(v);
 			nodes_right.insert(v.first);
@@ -540,19 +546,15 @@ int _tmain(int argc, char* argv[])
 		}
 	}
 
-	COORDINATES coo_half_rightleft;
-	coo_half_rightleft.x = coo_middle.x;
-	coo_half_rightleft.y = coo_max.y;
+	double const newmiddle_x = (coo_max.x + coo_min.x) / 2.0;
 
 	POSITIONS fixed_leftoptim = fixed_pad_posit;
 	fixed_leftoptim.insert( pos_right.begin(), pos_right.end() );
-	fixed_leftoptim = align_positions(coo_min, coo_half_rightleft, fixed_leftoptim);
+	fixed_leftoptim = align_positions(LEFT, coo_qcenter.x, newmiddle_x, fixed_leftoptim);
 
 	POSITIONS fixed_rightoptim = fixed_pad_posit;
 	fixed_rightoptim.insert( pos_left.begin(), pos_left.end() );
-
-	coo_half_rightleft.y = coo_min.y;
-	fixed_rightoptim = align_positions(coo_half_rightleft, coo_max, fixed_rightoptim);
+	fixed_rightoptim = align_positions(RIGHT, coo_qcenter.x, newmiddle_x,  fixed_rightoptim);
 
 #if 1
 	POSITIONS posit_left_optimization, posit_right_optimization;
