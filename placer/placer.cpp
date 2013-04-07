@@ -17,6 +17,7 @@
 #include <boost/filesystem/fstream.hpp>
 #include <boost/foreach.hpp>
 #include <boost/assert.hpp>
+#include <boost/bind.hpp>
 
 //////////////////////////////////////////////////////////////////////////////
 // check results:
@@ -168,12 +169,14 @@ void write_placement (const boost::filesystem::path& path, const POSITIONS& pos)
 	}
 }
 
-void get_rect (const POSITIONS& pos, COORDINATES& coo_min, COORDINATES& coo_max)
+void get_max_rect (const POSITIONS& pos, COORDINATES& coo_min, COORDINATES& coo_max)
 {
 	if (pos.empty())
 		return;
 
 	coo_min = pos.begin()->second;
+	coo_max = pos.begin()->second;
+
 	BOOST_FOREACH(const POSITIONS::value_type& v, pos)
 	{
 		if (coo_min.x > v.second.x)
@@ -190,27 +193,111 @@ void get_rect (const POSITIONS& pos, COORDINATES& coo_min, COORDINATES& coo_max)
 	}
 }
 
-void move_positions (
+void filter_by_rect (
+	const POSITIONS& pos, 
+	const COORDINATES& coo_min, const COORDINATES& coo_max,
+	NODESET& inside_nodes)
+{
+
+	BOOST_FOREACH(const POSITIONS::value_type& v, pos)
+	{
+		if (coo_min.x > v.second.x)
+			continue;
+
+		if (coo_min.y > v.second.y)
+			continue;
+
+		if (coo_max.x < v.second.x)
+			continue;
+
+		if (coo_max.y < v.second.y)
+			continue;
+
+		inside_nodes.insert(v.first);
+	}
+}
+
+struct NODE_COO {
+	ID_NODE id;
+	COORDINATES coo;
+};
+
+bool lower_left ( const NODE_COO& a, const NODE_COO& b )
+{
+	if (a.coo.x != b.coo.x)
+		return a.coo.x < b.coo.x;
+
+	return a.coo.y < b.coo.y;
+}
+
+bool lower_bottom ( const NODE_COO& a, const NODE_COO& b )
+{
+	if (a.coo.y != b.coo.y)
+		return a.coo.y < b.coo.y;
+
+	return a.coo.x < b.coo.x;
+}
+
+void get_split_coo ( const POSITIONS& pos, COORDINATES& coo_leftright, COORDINATES& coo_topbottom )
+{
+	std::vector<NODE_COO> vnc, vnc_lr, vnc_bt;
+	vnc.reserve(pos.size());
+
+	BOOST_ASSERT ( !pos.empty() );
+
+	BOOST_FOREACH( const POSITIONS::value_type&v, pos)
+	{
+		NODE_COO nc;
+		nc.id  = v.first;
+		nc.coo = v.second;
+
+		vnc.push_back(nc);
+	}
+
+	size_t const midix = vnc.size() / 2;
+
+	vnc_lr = vnc;
+	stable_sort (vnc_lr.begin(), vnc_lr.end(), lower_left);
+	coo_leftright = vnc_lr[ midix ].coo;
+	
+
+	vnc_bt = vnc;
+	stable_sort (vnc_bt.begin(), vnc_bt.end(), lower_bottom);
+	coo_topbottom = vnc_bt[ midix ].coo;
+}
+
+POSITIONS align_positions (
 	// bounding rectangle
 	const COORDINATES& bottom_left, 
 	const COORDINATES& top_right,
 
 	// position
-	const POSITIONS& positions,
-
-	// adjusted position
-	POSITIONS& adj_positions
+	const POSITIONS& positions
 	)
 {
+	POSITIONS al_positions;
+
 	//adj_positions.reserve(positions.size());
 	BOOST_FOREACH( const POSITIONS::value_type&v, positions)
 	{
-		COORDINATES coo = v.second;
-		adj_positions[v.first] = coo;
+		COORDINATES newcoo = v.second;
+		if (newcoo.x > top_right.x)
+			newcoo.x = top_right.x;
+
+		if (newcoo.y > top_right.y)
+			newcoo.y = top_right.y;
+
+		if (newcoo.x < bottom_left.x)
+			newcoo.x = bottom_left.x;
+
+		if (newcoo.y < bottom_left.y)
+			newcoo.y = bottom_left.y;
+
+		al_positions[v.first] = newcoo;
 	}
 
+	return al_positions;
 }
-
 
 void optimize_placement( 
 	// input:
@@ -346,7 +433,6 @@ void optimize_placement(
 	}
 }
 
-
 //////////////////////////////////////////////////////////////////////
 
 int _tmain(int argc, char* argv[])
@@ -362,10 +448,10 @@ int _tmain(int argc, char* argv[])
 	//////////////////////////////////////////////////////////////////////////////////////////////
 
 	NETLIST netlist; 
-	POSITIONS posit;
+	POSITIONS fixed_pad_posit;
 
 	const boost::filesystem::path path_specs( filename );
-	size_t nof_gates = read_specs( path_specs, netlist, posit);
+	size_t nof_gates = read_specs( path_specs, netlist, fixed_pad_posit);
 
 	if (nof_gates == 0)
 		return -1;
@@ -376,17 +462,77 @@ int _tmain(int argc, char* argv[])
 	for (int i = 1; i <= nof_gates; i++)
 		nodes_to_optimize.insert(i);
 
+	// test - should not align at all
 	COORDINATES coo_min, coo_max;
-	get_rect( posit, coo_min, coo_max );
+	get_max_rect( fixed_pad_posit, coo_min, coo_max );
+	fixed_pad_posit = align_positions(coo_min, coo_max, fixed_pad_posit);
 
-	POSITIONS fixed_posit;
-	move_positions(coo_min, coo_max, posit, fixed_posit);
-
-	POSITIONS new_posit;
+	POSITIONS posit_full_optimization;
 	optimize_placement( nodes_to_optimize, 
 		netlist,
-		fixed_posit, 
-		new_posit);
+		fixed_pad_posit, 
+		posit_full_optimization);
+
+	COORDINATES coo_half_rightleft, coo_half_topbottom;
+	get_split_coo( posit_full_optimization, coo_half_rightleft, coo_half_topbottom );
+
+	POSITIONS pos_left, pos_right;
+	NODESET nodes_left, nodes_right;
+
+	BOOST_FOREACH( const POSITIONS::value_type& v, posit_full_optimization )
+	{
+		if (v.second.x >= coo_half_rightleft.x)
+		{
+			pos_right.insert(v);
+			nodes_right.insert(v.first);
+		}
+		else
+		{
+			pos_left.insert(v);
+			nodes_left.insert(v.first);
+		}
+	}
+
+	POSITIONS fixed_leftoptim = fixed_pad_posit;
+	fixed_leftoptim.insert( pos_right.begin(), pos_right.end() );
+	fixed_leftoptim = align_positions(coo_half_rightleft, coo_max, fixed_leftoptim);
+
+	POSITIONS fixed_rightoptim = fixed_pad_posit;
+	fixed_rightoptim.insert( pos_left.begin(), pos_left.end() );
+	fixed_rightoptim = align_positions(coo_min, coo_half_rightleft, fixed_rightoptim);
+
+#if 0
+	POSITIONS posit_left_optimization, posit_right_optimization;
+	optimize_placement( nodes_left, 
+		netlist,
+		fixed_leftoptim, 
+		posit_left_optimization);
+
+	optimize_placement( nodes_right, 
+		netlist,
+		fixed_rightoptim, 
+		posit_right_optimization);
+
+	/*
+	NODESET nodes_all;
+
+	std::transform( 
+		posit_1st_optimization.begin(), posit_1st_optimization.end(),
+		std::inserter(nodes_all, nodes_all.begin()),
+		boost::bind ( &POSITIONS::value_type::first, _1 )
+	);
+
+	set_difference(posit_1st_optimization.begin(), posit_1st_optimization.end(), 
+		left_nodes.begin(), left_nodes.end(),
+		std::back_inserter( right_nodes )
+	);*/
+
+	POSITIONS pos_result;
+	pos_result.insert( posit_left_optimization.begin(),  posit_left_optimization.end() );
+	pos_result.insert( posit_right_optimization.begin(), posit_right_optimization.end() );
+#endif
+
+	POSITIONS pos_result = posit_full_optimization;
 
 	if (argc >= 3)
 	{
@@ -395,7 +541,7 @@ int _tmain(int argc, char* argv[])
 		outfilename += ".placement";
 
 		ofstream out ( outfilename );
-		BOOST_FOREACH( const POSITIONS::value_type&v, new_posit)
+		BOOST_FOREACH( const POSITIONS::value_type&v, pos_result)
 		{
 			const COORDINATES& coo = v.second;
 		
