@@ -418,11 +418,12 @@ void optimize_placement(
 		BOOST_FOREACH(ID_NODE const n1, nodes_optim)
 			BOOST_FOREACH(ID_NODE const n2, nodes_fixed)
 			{
+				// BOOST_ASSERT(nodes_fixed.size() == 1);
 				POSITIONS::const_iterator itWeights = fixed_positions.find( n2 );
 				BOOST_ASSERT( itWeights != fixed_positions.end() );
 				const COORDINATES& coo = itWeights->second;
 
-				double const clique_weight = 1.0 / ( nodes_optim.size() );
+				double const clique_weight = 1.0 / (nodes_optim.size() + nodes_fixed.size() -1);
 
 				WEIGHT_2D& w = weight[n1];
 				w.x += (clique_weight * coo.x);
