@@ -1,4 +1,5 @@
 Debug
+*.result
 Release
 *.placement
 */Release
