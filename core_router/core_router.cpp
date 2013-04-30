@@ -14,9 +14,7 @@
 
 #include <queue>
 #include <boost/assign/list_of.hpp>
-
 #include <map>
-
 
 ///////////////////////////////////////////////////////////////////////////////////////////
 
@@ -49,6 +47,8 @@ std::ostream& operator<< ( std::ostream& o , const COORDINATE& c)
 	return o;
 }
 
+/////////////////////////////////////////////////////////////////
+
 struct NETCOORDINATES
 {
 	size_t netid;
@@ -57,13 +57,35 @@ struct NETCOORDINATES
 
 typedef std::vector<NETCOORDINATES> NETLIST;
 
+/////////////////////////////////////////////////////////////////
+
 enum DIRECTION
 {
-	UNKNOWN = -1,
+	UNDEFINED = -1,
+	NONE,
 	N,S,E,W,U,D
 };
 
-int const UNKNOWN_COST = 100000;
+bool is_bend(DIRECTION d1, DIRECTION d2)
+{
+	if ((d1 == N || d1 == S) && (d2 == E || d2 == W))
+		return true;
+
+	if ((d1 == E || d1 == W) && (d2 == N || d2 == S))
+		return true;
+
+	return false;
+}
+
+bool is_via (DIRECTION d)
+{
+	return (d == U || d == D);
+}
+
+///////////////////////////////////////////////////////
+
+int const COST_UNDEFINED = -2;
+int const COST_BLOCKED = -1;
 
 struct WAVE_CELL
 {
@@ -72,8 +94,8 @@ struct WAVE_CELL
 
 	WAVE_CELL (void)
 	{
-		cost = UNKNOWN_COST;
-		pred = UNKNOWN;
+		cost = COST_UNDEFINED;
+		pred = UNDEFINED;
 	}
 };
 
@@ -83,7 +105,7 @@ typedef std::set<COORDINATE> SETCOO;
 typedef std::map<size_t, PATH> ROUTING;
 typedef std::map<COORDINATE, int> COSTS;
 
-size_t get_cost (const COORDINATE& coo, const COSTS& costs)
+int get_cost (const COSTS& costs, const COORDINATE& coo )
 {
 	COSTS::const_iterator it = costs.find( coo );
 	if (it == costs.end())
@@ -92,9 +114,38 @@ size_t get_cost (const COORDINATE& coo, const COSTS& costs)
 	return it->second;
 }
 
+bool is_blocked (const COSTS& costs, const COORDINATE& coo)
+{
+	return get_cost(costs, coo) == COST_BLOCKED;
+}
+
+void block (COSTS& costs, const COORDINATE& coo)
+{
+	costs[coo] = COST_BLOCKED;
+}
+
+void unblock (COSTS& costs, const COORDINATE& coo)
+{
+	COSTS::iterator it = costs.find( coo );
+	if (it != costs.end() && it->second != COST_BLOCKED)
+		return;
+
+	it->second = 1;
+}
+
+
+
 /////////////////////////////////////////////////////////////////////////////////////////////
 
-void read_specs (const std::string& path, const std::string& name, NETLIST& netlist, COORDINATE& dims, COSTS& costs)
+struct PENALTY
+{
+	size_t via;
+	size_t bend;
+};
+
+void read_specs (const std::string& path, const std::string& name, 
+				 NETLIST& netlist, COORDINATE& dims, COSTS& costs,
+				 PENALTY& penalty)
 {
 	const boost::filesystem::path p = path ;
 
@@ -136,8 +187,8 @@ void read_specs (const std::string& path, const std::string& name, NETLIST& netl
 
 	if ( in_grid )
 	{
-		size_t size_x, size_y, bend_penalty, via_penalty;
-		in_grid >> size_x >> size_y >> bend_penalty >> via_penalty;
+		size_t size_x, size_y;
+		in_grid >> size_x >> size_y >> penalty.bend >> penalty.via;
 
 		dims.layer = 2;
 		dims.x = size_x;
@@ -279,7 +330,10 @@ bool next_coo (DIRECTION d, const COORDINATE& dims, const COORDINATE& coo, COORD
 
 ////////////////////////////////////////////////////////////////////////////////////////////
 
-void route_single_route (const COORDINATE& dims, const COSTS& grid, const SETCOO& blocked, const NETCOORDINATES& pcs, PATH& path )
+void route_single_route (const COORDINATE& dims, const COSTS& grid, 
+						 const NETCOORDINATES& pcs, 
+						 const PENALTY& penalty,
+						 PATH& path )
 {
 	std::queue<COORDINATE> qq;
 	WAVEFRONT wf; 
@@ -295,6 +349,8 @@ void route_single_route (const COORDINATE& dims, const COSTS& grid, const SETCOO
 	BOOST_ASSERT(itC != grid.end());
 
 	wc.cost = itC->second;
+	wc.pred = NONE;
+
 	wf[coo_start] = wc;
 
 	while ( !qq.empty() )
@@ -314,16 +370,22 @@ void route_single_route (const COORDINATE& dims, const COSTS& grid, const SETCOO
 			{
 				BOOST_ASSERT(is_valid(dims, coo_next));
 
-				if ( blocked.find( coo_next) == blocked.end())
+				if ( !is_blocked( grid, coo_next ) )
 				{
 					COSTS::const_iterator itCM = grid.find( coo_from );
 					BOOST_ASSERT(itCM != grid.end());
 
 					wc.cost = itC->second;
 
-					size_t const cost_to_move = itCM->second;
-					WAVEFRONT::iterator itW = wf.find( coo_next );
+					size_t cost_to_move = itCM->second;
+					if ( is_bend(itW->second.pred, d))
+						cost_to_move += penalty.bend;
 
+					if ( is_via(d))
+						cost_to_move += penalty.via;
+
+					WAVEFRONT::iterator itW = wf.find( coo_next );
+				
 					if ( itW == wf.end() )
 					{
 						WAVE_CELL wc;
@@ -353,6 +415,13 @@ void route_single_route (const COORDINATE& dims, const COSTS& grid, const SETCOO
 	}
 
 	BOOST_ASSERT(path.empty());
+
+	if (wf.find( coo_end ) == wf.end())
+	{
+		std::cout << coo_end << " no route " << std::endl;
+		return;
+	}
+
 	COORDINATE coo = coo_end;
 
 	while (!(coo == coo_start))
@@ -381,30 +450,31 @@ int _tmain(int argc, _TCHAR* argv[])
 	NETLIST netlist;
 	COORDINATE dims;
 	COSTS costs;
+	PENALTY penalty;
 
-	read_specs (argv[1], argv[2], netlist, dims, costs);
+	std::cout << argv[1] << " -- " << argv[2] << std::endl;
 
-	SETCOO blocked;
-	BOOST_FOREACH( const COSTS::value_type& v,  costs)
-	{
-		if (v.second < 0)
-			blocked.insert(v.first);
-	}
+	read_specs (argv[1], argv[2], netlist, dims, costs, penalty);
 
 	ROUTING routing;
 
 	BOOST_FOREACH(const NETCOORDINATES& pcs, netlist)
 	{
+		std::cout << "routing net " << pcs.netid << "... ";
 		PATH path;
-		route_single_route( dims, costs, blocked, pcs, path);
+
+		unblock( costs, pcs.coo1 );
+		unblock( costs, pcs.coo2 );
+
+		route_single_route( dims, costs, pcs, penalty, path);
 
 		BOOST_FOREACH(const COORDINATE& coo, path)
-		{
-			blocked.insert( coo );
-		}
+			block( costs, coo );
 
 		std::reverse(path.begin(), path.end());
 		routing[pcs.netid] = path;
+
+		std::cout << "done" << std::endl;
 	}
 
 
