@@ -5,14 +5,18 @@
 #include <iostream>
 #include <fstream>
 #include <vector>
+#include <string>
+#include <map>
+#include <sstream>
+#include <boost/format.hpp>
 
 ///////////////////////////////////////////////////
 
 enum CUBEPTS
 {
-	XT      = 1,
-	XF   = 2,
-	XX       = 3
+	XT	= 1,
+	XF  = 2,
+	XX  = 3
 };
 
 typedef std::vector<CUBEPTS> cubeline;
@@ -31,18 +35,71 @@ bool has_all_dont_care ( const cubeline& cl )
 	return true;
 }
 
+bool can_and_cube(const cubeline& cla, const cubeline& clb, cubeline& cl)
+{
+	cl.clear();
+
+	for ( size_t i = 0; i < cla.size(); i++ )
+	{
+		if ((cla[i] == XF && clb[i] == XT) || (cla[i] == XT && clb[i] == XF))
+			return false;
+
+		else if (cla[i] == XX)
+			cl.push_back(clb[i]);
+
+		else 
+			cl.push_back(cla[i]);
+
+	}
+	return true;
+}
+
+std::vector<cubeline> not_cube(const cubeline& cl)
+{
+	std::vector<cubeline> cubelines;
+
+	for ( size_t i = 0; i < cl.size(); i++ )
+	{
+		if (cl[i] != XX)
+		{
+			cubeline clnew;
+			for ( size_t j = 0; j < cl.size(); j++ )
+			{
+				if (i==j)
+				{
+					if (cl[i] == XT)
+						clnew.push_back(XF);
+					else
+						clnew.push_back(XT);
+				}
+				else
+				 clnew.push_back(XX);
+			}
+
+			cubelines.push_back(clnew);
+		}
+	}
+
+	return cubelines;
+}
+
 struct cubeList
 {
 	size_t _nof_vars;
 	clist _l;
 
 	bool can_be_converted (cubeList& result) const;
+	bool can_be_simplified(cubeList& result) const;
+
+	bool is_done() const;
 	size_t get_nof_vars (void) const { return _nof_vars; };
 	bool has_some_dont_care(void) const;
 
 	void read	( std::istream& is );
 	void write	( std::ostream& os );
 };
+
+typedef std::map<int,cubeList> cubeListMemory;
 
 ////////////////////////////////////////////////////////
 
@@ -56,6 +113,36 @@ bool cubeList::has_some_dont_care(void) const
 
 	return false;
 }
+
+bool cubeList::can_be_simplified(cubeList& result) const
+{
+	if ( _l.empty() )
+	{
+		// Bolean 0:
+		return true;
+	}
+	else if (has_some_dont_care())
+	{
+		// return 1 [11 11 11 ...11]
+
+		cubeline clres;
+
+		for (size_t i = 0; i < get_nof_vars(); i++)
+			clres.push_back(XX);
+
+		result._l.push_back(clres);
+		return true;
+	}
+	else if (_l.size()==1)
+	{
+		const cubeline cline = _l[0];
+		result._l.push_back(cline);
+		return true;
+	}
+
+	return false;
+}
+
 
 bool cubeList::can_be_converted(cubeList& result) const
 {
@@ -114,6 +201,11 @@ bool cubeList::can_be_converted(cubeList& result) const
 
 
 	return false;
+}
+
+bool cubeList::is_done() const
+{
+	return (_l.size()<=1);
 }
 
 void cubeList::read(std::istream& is)
@@ -338,7 +430,6 @@ cubeList cofactor(const cubeList& cl, size_t x, bool positive)
 		it++;
 	}
 
-
 	return res;
 }
 
@@ -354,6 +445,8 @@ cubeList or (const cubeList& cl1, const cubeList& cl2)
 
 	return res;
 }
+
+////////////////////////////////////////////////////////////////////////
 
 cubeList and(const cubeList& cl, size_t x, bool positive)
 {
@@ -387,9 +480,61 @@ cubeList Complement (const cubeList& F)
 		N = and( N, x, false);
 
 		return or (P,N);
+	}
+
+	return res;
+}
+
+cubeList NComplement (const cubeList& F)
+{
+	cubeList res;
+	res._nof_vars = F.get_nof_vars();
+
+	if (F.can_be_simplified(res))
+		return res;
+	else
+	{
+		size_t x = find_split_index(F);
+
+		cubeList P = NComplement(cofactor(F,x, true));
+		cubeList N = NComplement(cofactor(F,x, false));
+
+		P = and( P, x, true);
+		N = and( N, x, false);
+
+		return or (P,N);
 
 	}
 
+	return res;
+}
+
+
+cubeList and (const cubeList& cl1, const cubeList& cl2)
+{
+	cubeList res;
+	res._nof_vars = cl1.get_nof_vars();
+
+	for (size_t i = 0; i < cl1._l.size(); ++i)
+	{
+		for (size_t j = 0; j < cl2._l.size(); ++j)
+		{
+			const cubeline& cla = cl1._l[i];
+			const cubeline& clb = cl2._l[j];
+
+			cubeline clres;
+			if (can_and_cube(cla, clb, clres))
+				res._l.push_back(clres);
+		}
+	}
+	res = NComplement(res);
+	return res;
+}
+
+cubeList not (const cubeList& cl)
+{
+	cubeList res;
+	res =  Complement(cl);
 	return res;
 }
 
@@ -397,16 +542,99 @@ cubeList Complement (const cubeList& F)
 
 int _tmain(int argc, _TCHAR* argv[])
 {
-	std::ifstream in(argv[1]);
+	if (argc < 2)
+	{
+		return -1;
+	}
 
-	cubeList cl;
-	cl.read(in);
+	std::string name = argv[1];
+	std::ifstream in(name);
 
-	cubeList clres = Complement(cl);
+	if (name.find(_T("cmd")) == std::string::npos)
+	{
+		cubeList cl;
+		cl.read(in);
+
+		cubeList clres = Complement(cl);
+		//cl.write (std::cout);
+		clres.write (std::cout);
+	}
+	else
+	{
+		cubeListMemory memory;
+		std::string line;
+		while (std::getline(in, line ))
+		{
+			std::cout << line << std::endl;
+
+			std::stringstream iss (line);
+
+			char command;
+			if (!(iss >> command)) 
+				{ break; } // error
+
+			switch (command)
+			{
+
+				case 'q':
+					break;
+
+				case 'r':
+					{
+						int n;
+						iss >> n;
+						std::string filename = str (boost::format("%d.pcn") % n);
+						std::ifstream in(filename);
+
+						cubeList cl;
+						cl.read(in);
+						memory[n] = cl;
+					}
+					break;
+
+				case 'p':
+					{
+						int n;
+						iss >> n;
+						std::string filename = str (boost::format("%d.pcn") % n);
+						std::ofstream out(filename);
+						memory[n].write(out);
+					}
+					break;
 
 
-	//cl.write (std::cout);
-	clres.write (std::cout);
+				case '!':
+					{
+						int k, n;
+						iss >> k >> n;
+						memory[k] = not (memory[n]);
+					}
+					break;
+
+
+				case '+':
+					{
+						int k, n, m;
+						iss >> k >> n >> m;
+						memory[k] = or (memory[n], memory[m]);
+					}
+
+					break;
+
+
+				case '&':
+					{
+						int k, n, m;
+						iss >> k >> n >> m;
+						memory[k] = and (memory[n], memory[m]);
+					}
+					break;
+
+
+			}
+
+		}
+	}
 	return 0;
 }
 

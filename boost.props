@@ -7,7 +7,7 @@
     <Compiler Condition="'$(PlatformToolset)' == 'v100'">msvc-10.0</Compiler>
     <Compiler Condition="'$(PlatformToolset)' == 'v110'">msvc-11.0</Compiler>
 
-    <BoostVersion>1.52.0</BoostVersion>
+    <BoostVersion>1.55.0</BoostVersion>
 
     <BoostInclude>$(PathToLib)\Boost\$(BoostVersion)\include\</BoostInclude>
     <BoostLib>$(PathToLib)\Boost\$(BoostVersion)\lib\$(Compiler)\$(PlatformName)</BoostLib>
