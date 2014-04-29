@@ -442,7 +442,7 @@ void route_single_route (const COORDINATE& dims, const COSTS& grid,
 
 /////////////////////////////////////////////////////////////////////////////////////////////
 
-int _tmain(int argc, _TCHAR* argv[])
+int main(int argc, char const* argv[])
 {
 	if (argc < 3)
 		return -1;
