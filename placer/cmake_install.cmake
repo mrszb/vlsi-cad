@@ -1,4 +1,4 @@
-# Install script for directory: /home/Marian/work/v/placer
+# Install script for directory: /cygdrive/c/Users/Marian/work/v/placer
 
 # Set the install prefix
 IF(NOT DEFINED CMAKE_INSTALL_PREFIX)

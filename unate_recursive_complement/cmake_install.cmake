@@ -1,4 +1,4 @@
-# Install script for directory: /home/Marian/work/v/unate_recursive_complement
+# Install script for directory: /cygdrive/c/Users/Marian/work/v/unate_recursive_complement
 
 # Set the install prefix
 IF(NOT DEFINED CMAKE_INSTALL_PREFIX)
