@@ -29,9 +29,9 @@ target_link_libraries (core_router
 )
 
 set (FILES_TO_USE_PCH ${SOURCE_FILES} ${GENEGATED_SOURCE_FILES})
-IF(MSVC)
+IF(MSVCO)
    use_precompiled_header (core_router stdafx.h stdafx.cpp FILES_TO_USE_PCH)
-ENDIF(MSVC)
+ENDIF(MSVCO)
 
 foreach (generated_file ${GENEGATED_SOURCE_FILES})
 	force_include (${generated_file} stdafx.h)

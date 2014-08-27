@@ -666,9 +666,15 @@ POSITIONS split_optimize_merge (
 
 //////////////////////////////////////////////////////////////////////
 
-int _tmain(int argc, char* argv[])
+int main(int argc, char* argv[])
 {
-	std::string filename = std::string(argv[1]) ;
+	if (argc < 2)
+	{
+		std::cout << "placer (dir) filename maxdepth" << std::endl;
+		return -1;
+	}
+
+	std::string filename = std::string(argv[1]);
 	
 	if (argc >= 3)
 	{
@@ -771,7 +777,7 @@ int _tmain(int argc, char* argv[])
 		outfilename += argv[2];
 		outfilename += ".placement";
 
-		ofstream out ( outfilename );
+		boost::filesystem::ofstream out ( outfilename );
 		BOOST_FOREACH( const POSITIONS::value_type&v, pos_result)
 		{
 			const COORDINATES& coo = v.second;

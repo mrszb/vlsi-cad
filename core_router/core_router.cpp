@@ -445,7 +445,10 @@ void route_single_route (const COORDINATE& dims, const COSTS& grid,
 int main(int argc, char const* argv[])
 {
 	if (argc < 3)
+	{
+		std::cout << "core_router path specsfile" << std::endl;
 		return -1;
+	}
 
 	NETLIST netlist;
 	COORDINATE dims;

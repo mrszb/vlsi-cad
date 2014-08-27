@@ -8,7 +8,10 @@
 #include <string>
 #include <map>
 #include <sstream>
+
 #include <boost/format.hpp>
+#include <boost/filesystem/path.hpp>
+#include <boost/filesystem/fstream.hpp>
 
 ///////////////////////////////////////////////////
 
@@ -433,7 +436,7 @@ cubeList cofactor(const cubeList& cl, size_t x, bool positive)
 	return res;
 }
 
-cubeList or (const cubeList& cl1, const cubeList& cl2)
+cubeList Or (const cubeList& cl1, const cubeList& cl2)
 {
 	cubeList res = cl1;
 
@@ -448,7 +451,7 @@ cubeList or (const cubeList& cl1, const cubeList& cl2)
 
 ////////////////////////////////////////////////////////////////////////
 
-cubeList and(const cubeList& cl, size_t x, bool positive)
+cubeList And(const cubeList& cl, size_t x, bool positive)
 {
 	cubeList res = cl;
 
@@ -476,10 +479,10 @@ cubeList Complement (const cubeList& F)
 		cubeList P = Complement(cofactor(F,x, true));
 		cubeList N = Complement(cofactor(F,x, false));
 
-		P = and( P, x, true);
-		N = and( N, x, false);
+		P = And( P, x, true);
+		N = And( N, x, false);
 
-		return or (P,N);
+		return Or (P,N);
 	}
 
 	return res;
@@ -499,10 +502,10 @@ cubeList NComplement (const cubeList& F)
 		cubeList P = NComplement(cofactor(F,x, true));
 		cubeList N = NComplement(cofactor(F,x, false));
 
-		P = and( P, x, true);
-		N = and( N, x, false);
+		P = And( P, x, true);
+		N = And( N, x, false);
 
-		return or (P,N);
+		return Or (P,N);
 
 	}
 
@@ -510,7 +513,7 @@ cubeList NComplement (const cubeList& F)
 }
 
 
-cubeList and (const cubeList& cl1, const cubeList& cl2)
+cubeList And (const cubeList& cl1, const cubeList& cl2)
 {
 	cubeList res;
 	res._nof_vars = cl1.get_nof_vars();
@@ -531,7 +534,7 @@ cubeList and (const cubeList& cl1, const cubeList& cl2)
 	return res;
 }
 
-cubeList not (const cubeList& cl)
+cubeList Not (const cubeList& cl)
 {
 	cubeList res;
 	res =  Complement(cl);
@@ -540,17 +543,18 @@ cubeList not (const cubeList& cl)
 
 ////////////////////////////////////////////////////////////////
 
-int _tmain(int argc, _TCHAR* argv[])
+int main(int argc, char* argv[])
 {
 	if (argc < 2)
 	{
+		std::cout << "unate_recursive_complement filename|cmd" << std::endl;
 		return -1;
 	}
 
 	std::string name = argv[1];
-	std::ifstream in(name);
+	boost::filesystem::ifstream in(name);
 
-	if (name.find(_T("cmd")) == std::string::npos)
+	if (name.find("cmd") == std::string::npos)
 	{
 		cubeList cl;
 		cl.read(in);
@@ -584,7 +588,7 @@ int _tmain(int argc, _TCHAR* argv[])
 						int n;
 						iss >> n;
 						std::string filename = str (boost::format("%d.pcn") % n);
-						std::ifstream in(filename);
+						boost::filesystem::ifstream in(filename);
 
 						cubeList cl;
 						cl.read(in);
@@ -597,7 +601,7 @@ int _tmain(int argc, _TCHAR* argv[])
 						int n;
 						iss >> n;
 						std::string filename = str (boost::format("%d.pcn") % n);
-						std::ofstream out(filename);
+						boost::filesystem::ofstream out(filename);
 						memory[n].write(out);
 					}
 					break;
@@ -607,7 +611,7 @@ int _tmain(int argc, _TCHAR* argv[])
 					{
 						int k, n;
 						iss >> k >> n;
-						memory[k] = not (memory[n]);
+						memory[k] = Not (memory[n]);
 					}
 					break;
 
@@ -616,7 +620,7 @@ int _tmain(int argc, _TCHAR* argv[])
 					{
 						int k, n, m;
 						iss >> k >> n >> m;
-						memory[k] = or (memory[n], memory[m]);
+						memory[k] = Or (memory[n], memory[m]);
 					}
 
 					break;
@@ -626,7 +630,7 @@ int _tmain(int argc, _TCHAR* argv[])
 					{
 						int k, n, m;
 						iss >> k >> n >> m;
-						memory[k] = and (memory[n], memory[m]);
+						memory[k] = And (memory[n], memory[m]);
 					}
 					break;
 

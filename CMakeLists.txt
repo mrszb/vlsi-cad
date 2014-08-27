@@ -5,6 +5,11 @@ project (vlsicad)
 set(Boost_USE_STATIC_LIBS OFF) 
 set(Boost_USE_MULTITHREADED ON)  
 set(Boost_USE_STATIC_RUNTIME OFF) 
+
+IF(MSVC)
+    set(Boost_USE_STATIC_LIBS ON) 
+ENDIF(MSVC)
+
 find_package(Boost 
 		1.53.0 
 		COMPONENTS thread 
