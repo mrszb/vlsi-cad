@@ -11,7 +11,7 @@ IF(MSVC)
 ENDIF(MSVC)
 
 find_package(Boost 
-		1.53.0 
+		1.57.0 
 		COMPONENTS thread 
 			   system 
 			   filesystem
@@ -20,7 +20,7 @@ find_package(Boost
 #include (CMake/qr.cmake)
 #include (CMake/pch.cmake)
 
-cmake_minimum_required (VERSION 2.6)
+cmake_minimum_required (VERSION 3.0)
 
 set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 
