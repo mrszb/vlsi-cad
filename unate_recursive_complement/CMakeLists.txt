@@ -52,9 +52,13 @@ if(${CMAKE_SYSTEM_NAME} MATCHES "Windows")
    set_target_properties(unate_recursive_complement PROPERTIES COMPILE_DEFINITIONS_RELWITHDEBINFO "_CONSOLE")
    set_target_properties(unate_recursive_complement PROPERTIES LINK_FLAGS_RELEASE "/SUBSYSTEM:WINDOWS")
    set_target_properties(unate_recursive_complement PROPERTIES LINK_FLAGS_MINSIZEREL "/SUBSYSTEM:WINDOWS")
+
+  message("dynamic boost urc")
+  add_definitions( -DBOOST_ALL_NO_LIB )
+
 endif(${CMAKE_SYSTEM_NAME} MATCHES "Windows")
 
 include_directories(${Boost_INCLUDE_DIRS})
-
-target_link_libraries(unate_recursive_complement ${Boost_LIBRARIES})
+#target_link_libraries(unate_recursive_complement ${Boost_LIBRARIES})
+target_link_libraries(unate_recursive_complement Boost::filesystem Boost::system Boost::thread)
   

@@ -64,5 +64,15 @@ if(${CMAKE_SYSTEM_NAME} MATCHES "Windows")
 endif(${CMAKE_SYSTEM_NAME} MATCHES "Windows")
 
 include_directories(${Boost_INCLUDE_DIRS})
+#target_link_libraries(core_router ${Boost_LIBRARIES})
+target_link_libraries(core_router Boost::filesystem Boost::system Boost::thread)
 
-target_link_libraries(core_router ${Boost_LIBRARIES})
+if (WIN32)
+  # disable autolinking in boost
+  message("dynamic")
+  add_definitions( -DBOOST_ALL_NO_LIB )
+
+  # force all boost libraries to dynamic link (we already disabled
+  # autolinking, so I don't know why we need this, but we do!)
+  add_definitions( -DBOOST_ALL_DYN_LINK )
+endif()

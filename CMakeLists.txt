@@ -1,3 +1,4 @@
+cmake_minimum_required (VERSION 3.0)
 set(CMAKE_LEGACY_CYGWIN_WIN32 0) 
 
 project (vlsicad)
@@ -7,24 +8,36 @@ set(Boost_USE_MULTITHREADED ON)
 set(Boost_USE_STATIC_RUNTIME OFF) 
 
 IF(MSVC)
-    set(Boost_USE_STATIC_LIBS ON) 
+ #  set(Boost_USE_STATIC_LIBS ON) 
 ENDIF(MSVC)
 
 find_package(Boost 
-		1.57.0 
-		COMPONENTS thread 
-			   system 
-			   filesystem
+		1.60.0 
+		COMPONENTS thread system filesystem
 		REQUIRED) 
 
-#include (CMake/qr.cmake)
-#include (CMake/pch.cmake)
+# manage compilation and linkage
+if(Boost_FOUND)
+ 
 
-cmake_minimum_required (VERSION 3.0)
+    message("BOOST " Boost_VERSION)
+    message("BOOST INCLUDE: " ${Boost_INCLUDE_DIRS})
+    foreach(lib ${Boost_LIBRARIES})
+    	message(${lib})
+    endforeach()
+
+   include_directories(${Boost_INCLUDE_DIRS})
+
+endif()
+
+add_definitions( -DBOOST_ALL_NO_LIB )
+add_definitions( -DBOOST_ALL_DYN_LINK )
+
+
 
 set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 
-include_directories ("${PROJECT_SOURCE_DIR}/..")
+#include_directories ("${PROJECT_SOURCE_DIR}/..")
 
 add_subdirectory ("unate_recursive_complement")
 add_subdirectory ("core_router")
