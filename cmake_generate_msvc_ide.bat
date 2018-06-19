@@ -1,8 +1,8 @@
-mkdir .msvc_ide
+REM SET BUILD_DIR=".msvc_ide"
+SET BUILD_DIR="./build"
 
-cd .msvc_ide
-SET BOOST_VER=1.66.0
-SET CMAKE_VER=3.11.0
+SET BOOST_VER=1.67.0
+SET CMAKE_VER=3.11.3
 
 SET USER_LIBS=%USERPROFILE%\libraries
 
@@ -11,7 +11,10 @@ SET BOOST_INCLUDEDIR=%USER_LIBS%\Boost\%BOOST_VER%\include
 
 echo %BOOST_LIBRARYDIR%
 
-REM %USER_LIBS%\CMake\%CMAKE_VER%\bin\cmake -G "Visual Studio 14 2015 Win64" ..
-%USER_LIBS%\CMake\%CMAKE_VER%\bin\cmake -G "Visual Studio 15 2017 Win64" ..
+mkdir %BUILD_DIR%
+pushd %BUILD_DIR%
 
-cd ..
+REM %USER_LIBS%\CMake\%CMAKE_VER%\bin\cmake -G "Visual Studio 14 2015 Win64" ..
+%USER_LIBS%\CMake\%CMAKE_VER%\bin\cmake -G "Visual Studio 15 2017 Win64" -DCMAKE_BUILD_TYPE=Release -T host=x64 ..
+
+popd

@@ -46,12 +46,18 @@ endmacro ()
 set (out_dir ${CMAKE_CURRENT_BINARY_DIR}/${QR_CONFIGURATION})
 
 if(${CMAKE_SYSTEM_NAME} MATCHES "Windows")
+   
    set_target_properties(unate_recursive_complement PROPERTIES LINK_FLAGS_DEBUG "/SUBSYSTEM:CONSOLE")
    set_target_properties(unate_recursive_complement PROPERTIES COMPILE_DEFINITIONS_DEBUG "_CONSOLE")
+
+   set_target_properties(unate_recursive_complement PROPERTIES LINK_FLAGS_MINSIZEREL "/SUBSYSTEM:WINDOWS")
+   set_target_properties(unate_recursive_complement PROPERTIES COMPILE_DEFINITIONS_MINSIZEREL "_CONSOLE")
+
+   set_target_properties(unate_recursive_complement PROPERTIES LINK_FLAGS_RELEASE "/SUBSYSTEM:WINDOWS")
+   set_target_properties(unate_recursive_complement PROPERTIES COMPILE_DEFINITIONS_RELEASE "_CONSOLE")
+
    set_target_properties(unate_recursive_complement PROPERTIES LINK_FLAGS_RELWITHDEBINFO "/SUBSYSTEM:CONSOLE")
    set_target_properties(unate_recursive_complement PROPERTIES COMPILE_DEFINITIONS_RELWITHDEBINFO "_CONSOLE")
-   set_target_properties(unate_recursive_complement PROPERTIES LINK_FLAGS_RELEASE "/SUBSYSTEM:WINDOWS")
-   set_target_properties(unate_recursive_complement PROPERTIES LINK_FLAGS_MINSIZEREL "/SUBSYSTEM:WINDOWS")
 
   message("dynamic boost urc")
   add_definitions( -DBOOST_ALL_NO_LIB )

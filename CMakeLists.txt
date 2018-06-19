@@ -1,3 +1,4 @@
+set(CMAKE_LEGACY_CYGWIN_WIN32 0) 
 cmake_minimum_required (VERSION 3.0)
 set(CMAKE_LEGACY_CYGWIN_WIN32 0) 
 
@@ -12,9 +13,17 @@ IF(MSVC)
 ENDIF(MSVC)
 
 find_package(Boost 
-		1.60.0 
+		1.67.0 
 		COMPONENTS thread system filesystem
 		REQUIRED) 
+
+if(NOT Boost_FOUND)
+    message(FATAL_ERROR "Could not find boost!")
+endif()
+
+message(STATUS "Boost_INCLUDE_DIRS: ${Boost_INCLUDE_DIRS}")
+message(STATUS "Boost_LIBRARIES: ${Boost_LIBRARIES}")
+message(STATUS "Boost_VERSION: ${Boost_VERSION}")
 
 # manage compilation and linkage
 if(Boost_FOUND)

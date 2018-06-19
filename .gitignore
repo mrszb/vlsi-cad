@@ -1,3 +1,5 @@
+build/*
+
 */CMakeFiles
 Makefile
 .msvc_ide
