@@ -13,7 +13,7 @@ IF(MSVC)
 ENDIF(MSVC)
 
 find_package(Boost 
-		1.67.0 
+		1.69.0 
 		COMPONENTS thread system filesystem
 		REQUIRED) 
 
