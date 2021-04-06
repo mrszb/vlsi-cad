@@ -1,5 +1,10 @@
 project (unate_recursive_complement)
-add_executable (unate_recursive_complement WIN32 vlsicad_urc.cpp)
+
+
+IF(MSVC)
+   set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} /SUBSYSTEM:WINDOWS /ENTRY:mainCRTStartup") 
+ENDIF(MSVC)
+add_executable (unate_recursive_complement vlsicad_urc.cpp)
 
 set_property(TARGET unate_recursive_complement PROPERTY CXX_STANDARD 17)
 set_property(TARGET unate_recursive_complement PROPERTY CXX_STANDARD_REQUIRED ON)

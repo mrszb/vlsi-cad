@@ -1,14 +1,18 @@
 project (placer)
 
 set (HEADER_FILES
-	stdafx.h
+	#stdafx.h
 )
 
 set (SOURCE_FILES
-	stdafx.cpp
+	#stdafx.cpp
 	placer.cpp
 	solver.cpp
 )
+
+IF(MSVC)
+  set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} /SUBSYSTEM:WINDOWS /ENTRY:mainCRTStartup") 
+ENDIF(MSVC)
 
 add_executable (placer WIN32 placer.cpp solver.cpp)
 

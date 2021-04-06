@@ -1,10 +1,7 @@
 // core_router.cpp : Defines the entry point for the console application.
 //
 
-//#include "stdafx.h"
-#define BOOST_NO_CXX11_SCOPED_ENUMS
 #include <boost/filesystem.hpp>
-#undef BOOST_NO_CXX11_SCOPED_ENUMS
 
 #include <boost/multi_array.hpp>
 #include <boost/foreach.hpp>

@@ -12,24 +12,16 @@ set (SOURCE_FILES
 source_group ("header files" FILES ${HEADER_FILES})
 source_group ("source files" FILES ${SOURCE_FILES})
 
-add_executable (core_router WIN32 ${HEADER_FILES} ${SOURCE_FILES})
+IF(MSVC)
+  set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} /SUBSYSTEM:WINDOWS /ENTRY:mainCRTStartup")
+ENDIF(MSVC)
 
-if(${CMAKE_SYSTEM_NAME} MATCHES "Windows")
-  # set_target_properties(core_router PROPERTIES LINK_FLAGS "/SUBSYSTEM:CONSOLE")
-  #  set_target_properties(core_router PROPERTIES COMPILE_DEFINITIONS_DEBUG "_CONSOLE")
-  #  set_target_properties(core_router PROPERTIES LINK_FLAGS_RELWITHDEBINFO "/SUBSYSTEM:CONSOLE")
-  # target_link_options(core_router PUBLIC /entry:mainCRTStartup /SUBSYSTEM:WINDOWS)
-endif(${CMAKE_SYSTEM_NAME} MATCHES "Windows")
+add_executable (core_router ${HEADER_FILES} ${SOURCE_FILES})
 
-include_directories(${Boost_INCLUDE_DIRS})
-target_link_libraries(core_router PRIVATE Boost::filesystem Boost::system CONAN_PKG::fmt)
+include_directories(${Boost_FILESYSTEM_INCLUDE_DIRS})
+target_link_libraries(core_router PRIVATE Boost::filesystem Boost::system)
 
-# if (WIN32)
-#   # disable autolinking in boost
-#   message("dynamic")
-#   add_definitions( -DBOOST_ALL_NO_LIB )
 
-#   # force all boost libraries to dynamic link (we already disabled
-#   # autolinking, so I don't know why we need this, but we do!)
-#   add_definitions( -DBOOST_ALL_DYN_LINK )
-# endif()
+
+
+
