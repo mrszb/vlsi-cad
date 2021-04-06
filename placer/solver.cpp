@@ -1,4 +1,4 @@
-#include "stdafx.h"
+//#include "stdafx.h"
 #include "solver.h"
 
 void coo_matrix::read_coo_matrix(const char *fname){

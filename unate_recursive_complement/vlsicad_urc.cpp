@@ -1,7 +1,7 @@
 // vlsicad_urc.cpp : Defines the entry point for the console application.
 //
 
-#include "stdafx.h"
+//#include "stdafx.h"
 #include <iostream>
 #include <fstream>
 #include <vector>
@@ -10,8 +10,12 @@
 #include <sstream>
 
 #include <boost/format.hpp>
-#include <boost/filesystem/path.hpp>
-#include <boost/filesystem/fstream.hpp>
+
+#include <filesystem>
+namespace fs = std::filesystem;
+
+//#include <boost/filesystem/path.hpp>
+//#include <boost/filesystem/fstream.hpp>
 
 ///////////////////////////////////////////////////
 
@@ -552,7 +556,7 @@ int main(int argc, char* argv[])
 	}
 
 	std::string name = argv[1];
-	boost::filesystem::ifstream in(name);
+	std::ifstream in(name);
 
 	if (name.find("cmd") == std::string::npos)
 	{
@@ -588,7 +592,7 @@ int main(int argc, char* argv[])
 						int n;
 						iss >> n;
 						std::string filename = str (boost::format("%d.pcn") % n);
-						boost::filesystem::ifstream in(filename);
+						std::ifstream in(filename);
 
 						cubeList cl;
 						cl.read(in);
@@ -601,7 +605,7 @@ int main(int argc, char* argv[])
 						int n;
 						iss >> n;
 						std::string filename = str (boost::format("%d.pcn") % n);
-						boost::filesystem::ofstream out(filename);
+						std::ofstream out(filename);
 						memory[n].write(out);
 					}
 					break;

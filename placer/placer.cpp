@@ -1,7 +1,7 @@
 // placer.cpp : Defines the entry point for the console application.
 //
 
-#include "stdafx.h"
+//#include "stdafx.h"
 #include <fstream>
 #include <iostream>
 #include <map>
@@ -13,15 +13,15 @@
 #include <vector>
 #include <string>
 
-#include <boost/filesystem.hpp>
-#include <boost/filesystem/fstream.hpp>
 #include <boost/foreach.hpp>
 #include <boost/assert.hpp>
 #include <boost/bind.hpp>
 #include <boost/bimap.hpp>
 
+#include <filesystem>
+namespace fs = std::filesystem;
+
 int max_depth = 6;
-//int max_depth = 3;
 
 //////////////////////////////////////////////////////////////////////////////
 // check results:
@@ -125,10 +125,10 @@ typedef std::vector<NODESET> CONNECTIONS;
 
 ///////////////////////////////////////////////////////////////////////
 
-int read_specs ( const boost::filesystem::path& path, 
+int read_specs ( const std::filesystem::path& path, 
 				PROBLEMSET& netlist, POSITIONS& posit )
 {
-	boost::filesystem::ifstream is( path );
+	std::ifstream is( path );
 
 	if (!is)
 		return 0;
@@ -219,9 +219,9 @@ void check_netlist (const NETLIST& netlist)
 	}
 }*/
 
-void write_placement (const boost::filesystem::path& path, const POSITIONS& pos)
+void write_placement (const fs::path& path, const POSITIONS& pos)
 {
-	boost::filesystem::ofstream out ( path );
+	std::ofstream out ( path );
 	BOOST_FOREACH( const POSITIONS::value_type& v, pos)
 	{
 		ID_NODE node = v.first;
@@ -692,7 +692,7 @@ int main(int argc, char* argv[])
 	PROBLEMSET netlist; 
 	POSITIONS fixed_pad_posit;
 
-	const boost::filesystem::path path_specs( filename );
+	const fs::path path_specs( filename );
 	size_t nof_gates = read_specs( path_specs, netlist, fixed_pad_posit);
 
 	if (nof_gates == 0)
@@ -777,7 +777,7 @@ int main(int argc, char* argv[])
 		outfilename += argv[2];
 		outfilename += ".placement";
 
-		boost::filesystem::ofstream out ( outfilename );
+		std::ofstream out ( outfilename );
 		BOOST_FOREACH( const POSITIONS::value_type&v, pos_result)
 		{
 			const COORDINATES& coo = v.second;
